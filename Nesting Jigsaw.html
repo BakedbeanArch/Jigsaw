@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jig Analyzer v1.4.0</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="stylesheet" href="style.css">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js')
+          .then(registration => console.log('SW Registered!'))
+          .catch(err => console.log('SW Registration Failed:', err));
+      }
+    </script>
+</head>
+<body>
+    <script>
+      // Instantly apply theme and background from localStorage to prevent FOUC
+      try {
+        const settings = JSON.parse(localStorage.getItem('sga_settings') || '{}');
+        if (settings.theme) {
+          document.documentElement.setAttribute('data-theme', settings.theme);
+        }
+        if (settings.background) {
+          document.body.style.backgroundImage = settings.background;
+        }
+      } catch (e) { console.error('Error loading initial theme/background settings:', e); }
+    </script>
+    
+    <div class="admin-mode-overlay"></div>
+
+    <div class="loading-screen" id="loading-screen">
+        <div class="loading-logo">JIGSAW</div>
+        <div class="loading-spinner"></div>
+        <div class="loading-progress">
+            <div class="loading-progress-bar" id="loading-bar"></div>
+        </div>
+    </div>
+    
+    <div class="welcome-screen" id="welcome-screen">
+        <h1 class="welcome-title">Jig Analyzer v1.4.0</h1>
+        <p class="welcome-subtitle">Design, analyze and optimize component jigs with hyper-dramatic visualization tools.</p>
+        <div class="welcome-features">
+            <div class="welcome-feature"><span class="welcome-feature-icon">✨</span><h3 class="welcome-feature-title">Dramatic Multi-Select</h3><p class="welcome-feature-desc">Hold Shift + Drag to apply actions with a powerful ripple effect.</p></div>
+            <div class="welcome-feature"><span class="welcome-feature-icon">↔️</span><h3 class="welcome-feature-title">Pan & Zoom</h3><p class="welcome-feature-desc">Navigate huge grids easily using Spacebar + Drag.</p></div>
+            <div class="welcome-feature"><span class="welcome-feature-icon">📸</span><h3 class="welcome-feature-title">Realistic Analysis</h3><p class="welcome-feature-desc">Detect defects from uploaded images or camera capture.</p></div>
+            <div class="welcome-feature"><span class="welcome-feature-icon">💾</span><h3 class="welcome-feature-title">Advanced Data</h3><p class="welcome-feature-desc">Name, save, load, and manage your jig configurations.</p></div>
+        </div>
+        <div class="welcome-buttons">
+            <button id="start-new-btn" class="btn btn-primary btn-lg">CREATE NEW JIG</button>
+            <button id="load-demo-btn" class="btn btn-outline btn-lg">LOAD DEMO</button>
+        </div>
+        <button id="start-admin-btn" class="btn btn-danger" style="margin-top: 1.5rem;">ENTER ADMIN MODE</button>
+    </div>
+    
+    <div class="energy-boot-screen" id="energy-boot-screen">
+        <h2 class="boot-core-text">JIGSAW CORE ONLINE</h2>
+    </div>
+
+    <div class="admin-boot-screen" id="admin-boot-screen">
+        <div class="admin-boot-scanline"></div>
+        <div class="boot-lines-container">
+            <p style="animation-delay: 0.2s;">INITIATING SYSTEM OVERRIDE...</p>
+            <p style="animation-delay: 0.4s;">BYPASSING SECURITY PROTOCOLS... <span style="color: #66ff6b;">[OK]</span></p>
+            <p style="animation-delay: 0.6s;">MOUNTING SHADOW_FS... <span style="color: #66ff6b;">[OK]</span></p>
+            <p style="animation-delay: 0.8s;">DECRYPTING CORE JIGSAW LIBRARIES...</p>
+            <p style="animation-delay: 1.0s;">  > lib_grid.dll... <span style="color: #66ff6b;">[DONE]</span></p>
+            <p style="animation-delay: 1.2s;">  > lib_render.dll... <span style="color: #66ff6b;">[DONE]</span></p>
+            <p style="animation-delay: 1.4s;">  > lib_auth.dll... <span style="color: var(--warning);">[ACCESS DENIED]</span>... FORCED <span style="color: #66ff6b;">[OK]</span></p>
+            <p style="animation-delay: 1.8s;">INJECTING ROOTKIT... <span style="color: #66ff6b;">[OK]</span></p>
+            <p style="animation-delay: 2.2s;">PURGING SYSTEM LOGS... </p>
+            <p style="animation-delay: 2.6s;"><span style="color: var(--warning);">WARNING:</span> UNSTABLE ENERGY CORE DETECTED.</p>
+            <p style="animation-delay: 3.0s;">DISABLING SAFEGUARDS... COMPLETE.</p>
+        </div>
+        <h2 class="admin-boot-text">ROOT ACCESS GRANTED</h2>
+        <p class="admin-boot-subtext">SYSTEM OVERRIDE PROTOCOL... ENGAGED</p>
+    </div>
+    
+    <div class="modal-overlay" id="camera-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Camera Capture</h2>
+                <button class="modal-close-btn" data-target="camera-modal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="camera-container">
+                    <video id="camera-view" playsinline autoplay></video>
+                    <canvas id="camera-canvas"></canvas>
+                    <button id="camera-switch-btn" class="btn btn-outline">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16"><path d="M11.854 3.146a.5.5 0 0 1 0 .708L8.707 7H14.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-5.793l3.147 3.146a.5.5 0 0 1-.708.708l-4-4a.5.5 0 0 1 0-.708l4-4a.5.5 0 0 1 .708 0zM1.5 8a.5.5 0 0 1 .5-.5h5.793L4.646 4.354a.5.5 0 1 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L7.293 9H1.5a.5.5 0 0 1-.5-.5v-1z"/></svg>
+                    </button>
+                </div>
+                <div id="camera-buttons" class="btn-group" style="justify-content: center;">
+                    <button id="capture-btn" class="btn btn-primary">CAPTURE</button>
+                    <button id="retake-btn" class="btn btn-outline" style="display:none;">RETAKE</button>
+                    <button id="use-photo-btn" class="btn btn-secondary" style="display:none;">USE PHOTO</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="settings-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Application Settings</h2>
+                <button class="modal-close-btn" data-target="settings-modal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-container">
+                    <nav class="settings-nav">
+                        <button class="btn settings-nav-btn active" data-tab="profile">Profile</button>
+                        <button class="btn settings-nav-btn" data-tab="appearance">Appearance</button>
+                        <button class="btn settings-nav-btn" data-tab="history">History</button>
+                        <button class="btn settings-nav-btn" data-tab="data">Data</button>
+                    </nav>
+                    <div class="settings-content">
+                        <div id="tab-profile" class="settings-tab-content active">
+                            <h3>User Profile</h3>
+                            <p>This information will be used in your printed reports.</p>
+                            <div class="form-group" style="margin-top: 1rem;">
+                                <label for="profile-name">Your Name (Analyst)</label>
+                                <input type="text" id="profile-name" placeholder="e.g., Jane Doe">
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-company">Company / Organization</label>
+                                <input type="text" id="profile-company" placeholder="e.g., Analysis Inc.">
+                            </div>
+                        </div>
+                        <div id="tab-appearance" class="settings-tab-content">
+                            <h3>Appearance</h3>
+                            <div class="form-group" style="margin-top: 1rem;">
+                                <h4>Theme</h4>
+                                <div class="theme-switch-wrapper">
+                                    <span>Light / Dark Mode</span>
+                                    <label class="theme-switch">
+                                        <input type="checkbox" id="theme-toggle">
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-top: 2rem;">
+                                <h4>Customize Background</h4>
+                                <p>Choose a preset or upload your own image.</p>
+                                <div class="btn-group">
+                                    <label for="background-upload-input" class="btn btn-primary">UPLOAD IMAGE</label>
+                                    <input type="file" id="background-upload-input" accept="image/*" style="display:none;">
+                                    <button id="background-reset-btn" class="btn btn-outline">RESET TO DEFAULT</button>
+                                </div>
+                                <div class="background-presets" id="background-presets">
+                                    <div class="preset-box" data-bg="default" style="background: var(--background);"></div>
+                                    <div class="preset-box" data-bg="url('https://www.transparenttextures.com/patterns/carbon-fibre-v2.png')" style="background-color: #e9ecef; background-image: url('https://www.transparenttextures.com/patterns/carbon-fibre-v2.png');"></div>
+                                    <div class="preset-box" data-bg="url('https://www.transparenttextures.com/patterns/hexellence.png')" style="background-color: #e9ecef; background-image: url('https://www.transparenttextures.com/patterns/hexellence.png');"></div>
+                                    <div class="preset-box" data-bg="linear-gradient(45deg, #e0c3fc, #8ec5fc)" style="background: linear-gradient(45deg, #e0c3fc, #8ec5fc);"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="tab-history" class="settings-tab-content">
+                            <h3>Action History</h3>
+                            <ul id="history-log"><li>No actions recorded yet.</li></ul>
+                            <div class="btn-group">
+                                <button id="history-clear-btn" class="btn btn-danger">CLEAR HISTORY</button>
+                            </div>
+                        </div>
+                        <div id="tab-data" class="settings-tab-content">
+                            <h3>Manage Jig Data</h3>
+                            <div class="panel" style="background: var(--surface);">
+                                <h4 class="panel-title" style="color: var(--text-color);">Save & Load State</h4>
+                                <p>Save your current jig to your browser for later use.</p>
+                                <div class="btn-group">
+                                    <button id="save-state-btn" class="btn btn-primary">SAVE CURRENT JIG</button>
+                                </div>
+                                <ul id="saved-states-list" style="margin-top: 1rem;"><li>No saved states.</li></ul>
+                            </div>
+                            <div class="panel" style="background: var(--surface);">
+                                <h4 class="panel-title" style="color: var(--text-color);">Import & Export Data</h4>
+                                <p>Export jig data as a JSON file to save or share.</p>
+                                <div class="btn-group">
+                                    <button id="export-data-btn" class="btn btn-secondary">EXPORT TO JSON</button>
+                                    <label for="import-data-input" class="btn btn-outline">IMPORT FROM JSON</label>
+                                    <input type="file" id="import-data-input" accept=".json" style="display:none;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="container" id="app-container">
+        <header>
+            <div class="header-main">
+                <div class="header-content">
+                    <h1 id="main-header-title">JIG ANALYSIS</h1>
+                </div>
+                <div class="header-meta">
+                    <div class="header-status">
+                        <span class="header-status-light"></span>
+                        <span id="header-status-text">SYSTEM: ONLINE</span>
+                    </div>
+                    <span>VER 1.4.0 AXIS-SHIFT</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                 <button class="settings-btn" id="back-to-menu-btn" title="Back to Main Menu">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M6.5 14.5v-3.5h3v3.5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5zm-1.265 1.158a.5.5 0 0 1-.707 0l-3-3a.5.5 0 0 1 0-.708l3-3a.5.5 0 1 1 .707.708L2.707 8.5H13.5a.5.5 0 0 1 0 1H2.707l2.036 2.036a.5.5 0 0 1 0 .708z"/></svg>
+                 </button>
+                 <button class="settings-btn" id="open-settings-btn" title="Open Settings">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16"><path d="M9.405 1.05c-.413-1.2-2.397-1.2-2.81 0l-.1.34a1.264 1.264 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.264 1.264 0 0 1-.872 2.105l-.34.1c-1.2.413-1.2 2.397 0 2.81l.34.1a1.264 1.264 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.264 1.264 0 0 1 2.105.872l.1.34c.413 1.2 2.397 1.2 2.81 0l.1-.34a1.264 1.264 0 0 1 2.105-.872l.31.17c1.283-.698 2.686-.705 1.987 1.987l-.169-.311a1.264 1.264 0 0 1 .872-2.105l.34-.1c-1.2-.413-1.2-2.397 0-2.81l-.34-.1a1.264 1.264 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.264 1.264 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z"/></svg>
+                </button>
+            </div>
+        </header>
+        
+        <div class="app-container">
+            <div class="controls">
+                <div class="panel">
+                    <h2 class="panel-title">JIG CONFIGURATION</h2>
+                    <div class="form-group"><label for="grid-title">Jig Title</label><input type="text" id="grid-title" placeholder="e.g., Assembly Line 3, Jig B"></div>
+                    <div class="form-group"><label for="grid-width">Jig Columns</label><input type="number" id="grid-width" min="1" max="150" value="10"></div>
+                    <div class="form-group"><label for="grid-height">Jig Rows</label><input type="number" id="grid-height" min="1" max="150" value="10"></div>
+                    <div class="form-group">
+                        <label for="col-header-style">Column Header Style</label>
+                        <select id="col-header-style">
+                            <option value="numeric">Numeric (1, 2, 3...)</option>
+                            <option value="alpha">Alphabetical (A, B, C...)</option>
+                            <option value="roman">Roman (I, II, III...)</option>
+                            <option value="symbols">Symbols (●, ■, ▲...)</option>
+                        </select>
+                    </div>
+                     <div class="form-group">
+                        <label for="row-header-style">Row Header Style</label>
+                        <select id="row-header-style">
+                            <option value="alpha">Alphabetical (A, B, C...)</option>
+                            <option value="numeric">Numeric (1, 2, 3...)</option>
+                            <option value="roman">Roman (I, II, III...)</option>
+                            <option value="symbols">Symbols (●, ■, ▲...)</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label for="cell-size">Slot Size (px)</label><input type="number" id="cell-size" min="10" max="50" value="30"></div>
+                    <div class="btn-group"><button id="reset-grid" class="btn btn-outline">RESET</button></div>
+                </div>
+                <div class="panel">
+                    <h2 class="panel-title">DESIGN TOOLS</h2>
+                    <div class="form-group">
+                        <label>Paint Mode & Shortcuts</label>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: -0.5rem; margin-bottom: 0.75rem;">Hold `Shift` + Drag to multi-select.</p>
+                        <div class="drawing-modes" id="drawing-mode-container">
+                            <button class="drawing-mode-btn active" data-mode="add">ADD (A)</button>
+                            <button class="drawing-mode-btn" data-mode="defect">DEFECT (D)</button>
+                            <button class="drawing-mode-btn" data-mode="mark">SPECIAL (S)</button>
+                            <button class="drawing-mode-btn" data-mode="remove">REMOVE (R)</button>
+                        </div>
+                    </div>
+                    <div id="selection-controls">
+                        <p id="selection-instruction" style="font-size: 0.9rem; color: var(--text-muted); font-weight: 600;"></p>
+                        <div class="btn-group">
+                            <button id="confirm-selection-btn" class="btn"></button>
+                            <button id="cancel-selection-btn" class="btn btn-outline">CANCEL</button>
+                        </div>
+                    </div>
+                    <div class="btn-group"><button id="clear-selection" class="btn btn-outline">CLEAR JIG (C)</button><button id="clear-defects" class="btn btn-danger">CLEAR DEFECTS</button><button id="clear-marks" class="btn btn-success">CLEAR SPECIAL</button></div>
+                </div>
+                <div class="panel">
+                    <h2 class="panel-title">SHAPE TOOLS</h2>
+                    <p id="block-instructions" style="font-size: 0.85rem; color: var(--text-muted); margin-top: -0.5rem; margin-bottom: 0.75rem;">Create custom polygonal shapes over the jig layout.</p>
+                    
+                    <div id="block-context-controls">
+                        <button id="add-shape-btn" class="btn btn-primary">START NEW SHAPE</button>
+                        <button id="delete-shape-btn" class="btn btn-danger" style="display:none;">DELETE SELECTED SHAPE</button>
+                    </div>
+
+                    <div id="shape-properties-panel" style="display: none; margin-top: 1rem;">
+                        <h4 style="font-family: 'Orbitron'; font-size: 0.9rem; margin-bottom: 0.5rem;">Selected Shape Vertices</h4>
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">Right-click a handle to delete it. Double-click an edge to add a new vertex.</p>
+                        <ul id="shape-points-list" style="list-style: none; padding: 0; max-height: 150px; overflow-y: auto;">
+                        </ul>
+                    </div>
+                </div>
+                <div class="panel">
+                    <h2 class="panel-title">IMAGE ANALYSIS</h2>
+                    <div class="image-upload" id="image-upload"><input type="file" id="image-input" accept="image/*"><span class="image-upload-label">DRAG & DROP OR CLICK TO UPLOAD</span><img id="image-preview" class="image-preview" alt="Image preview"></div>
+                    <button id="open-camera-btn" class="btn btn-info" style="width: 100%; margin-bottom: 1rem;">USE CAMERA</button>
+                    <div class="btn-group"><button id="analyze-image" class="btn btn-secondary" disabled>ANALYZE IMAGE</button><button id="clear-image" class="btn btn-outline">CLEAR</button></div>
+                </div>
+            </div>
+            
+            <div class="grid-container-wrapper" id="grid-container-wrapper">
+                <div id="grid-export-area" class="grid-export-area">
+                    <div class="grid-title" id="display-title">JIG PREVIEW</div>
+                    <div id="grid-layout-container">
+                        <div class="grid-corner-box"></div>
+                        <div id="grid-column-headers" class="grid-column-headers"></div>
+                        <div id="grid-row-headers" class="grid-row-headers"></div>
+                        <div id="grid-preview">
+                            <div id="selection-rectangle"></div>
+                            <svg id="shape-svg-overlay"></svg>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="panel" style="width: 100%; margin-top: 1.5rem;">
+                    <h2 class="panel-title" style="border: none; padding: 0; margin-bottom: 0.5rem;">JIG STATISTICS</h2>
+                    <div class="stats-panel"><div class="stats-item"><span class="stats-label">Total Slots:</span><span class="stats-value" id="total-cells">100</span></div><div class="stats-item"><span class="stats-label">Active Slots:</span><span class="stats-value" id="active-cells">100</span></div><div class="stats-item"><span class="stats-label">Defective Slots:</span><span class="stats-value" id="defect-cells">0</span></div><div class="stats-item"><span class="stats-label">Special Slots:</span><span class="stats-value" id="marked-cells">0</span></div><div class="stats-item"><span class="stats-label">Removed Slots:</span><span class="stats-value" id="removed-cells">0</span></div></div>
+                    <div class="color-indicators"><span class="color-indicator"><span class="color-box color-active"></span>ACTIVE</span><span class="color-indicator"><span class="color-box color-defect"></span>DEFECT</span><span class="color-indicator"><span class="color-box color-marked"></span>SPECIAL</span><span class="color-indicator"><span class="color-box color-removed"></span>REMOVED</span></div>
+                </div>
+                
+                <div class="btn-group" style="margin-top: 1.5rem;">
+                    <button id="export-png-btn" class="btn btn-primary">EXPORT PNG</button>
+                    <button id="export-pdf-btn" class="btn btn-primary">EXPORT PDF</button>
+                    <button id="print-grid-btn" class="btn btn-outline">PRINT</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Jig Analyzer © 2024 | A modern tool for technical professionals.</p>
+        </div>
+    </div>
+    
+    <div id="notification-container"></div>
+    
+    <div id="selection-action-menu" class="selection-action-menu">
+        <button data-action="add" class="btn btn-sm btn-primary" title="Set as Active">Add</button>
+        <button data-action="defect" class="btn btn-sm btn-danger" title="Set as Defect">Defect</button>
+        <button data-action="mark" class="btn btn-sm btn-success" title="Set as Special">Special</button>
+        <button data-action="removed" class="btn btn-sm btn-secondary" title="Set as Removed">Remove</button>
+        <button data-action="cancel" class="btn btn-sm btn-outline" title="Cancel Selection">×</button>
+    </div>
+
+    <script src="script.js" defer></script>
+</body>
+  </html>
